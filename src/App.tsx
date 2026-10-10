@@ -31,6 +31,8 @@ export default function App() {
   const [panel, setPanel] = useState<Panel>(null);
 
   const noPermission = sources?.screenPermission === false;
+  const isWindows = sources?.platform === "windows";
+  const systemAudioDisabledReason = sources?.supportsSystemAudio === false ? "System audio is not available on Windows" : undefined;
   const micDenied = settings.mic && sources?.micPermission === "denied";
   const mics = sources?.mics ?? [];
 
@@ -99,7 +101,7 @@ export default function App() {
       fps: settings.fps,
       scale: settings.scale,
       codec: settings.codec,
-      systemAudio: settings.systemAudio,
+      systemAudio: settings.systemAudio && !systemAudioDisabledReason,
       micId: settings.mic ? settings.micId : undefined,
       keepTitles: [CAMERA_TITLE],
     };
@@ -112,6 +114,23 @@ export default function App() {
   };
 
   // Why the record button is disabled, shown as its tooltip.
+  // macOS uses the interactive `screencapture -i`; Windows needs explicit geometry.
+  const screenshot = async () => {
+    let a = area;
+    if (isWindows && mode === "area" && !a) {
+      a = await pickArea();
+      if (!a) return;
+      setArea(a);
+    }
+    const target =
+      mode === "window"
+        ? { windowId }
+        : mode === "area" && a
+          ? { displayId: await displayIdFor(a.monitorX, a.monitorY), rect: [a.x, a.y, a.width, a.height] as [number, number, number, number] }
+          : { displayId: await displayIdFor() };
+    await rec.screenshot(mode, settings.outputDir, target);
+  };
+
   const recordDisabledReason = noPermission
     ? "Screen Recording permission required"
     : !settings.outputDir
@@ -131,6 +150,7 @@ export default function App() {
         camera={camera}
         onCamera={toggleCamera}
         systemAudio={settings.systemAudio}
+        systemAudioDisabledReason={systemAudioDisabledReason}
         onSystemAudio={() => update({ systemAudio: !settings.systemAudio })}
         mic={settings.mic}
         onMic={toggleMic}
@@ -144,7 +164,7 @@ export default function App() {
         onPause={rec.pause}
         onResume={rec.resume}
         onStop={rec.stop}
-        onScreenshot={() => rec.screenshot(mode, settings.outputDir)}
+        onScreenshot={screenshot}
         onClose={close}
       />
 

@@ -27,6 +27,18 @@ Release builds are not signed with a Developer ID yet, so Gatekeeper blocks the 
 xattr -cr "/Applications/Tix Recorder.app"
 ```
 
+## Windows build (from macOS, cross-compiled)
+
+```sh
+brew install nsis llvm
+export PATH="$(brew --prefix llvm)/bin:$PATH"
+rustup target add x86_64-pc-windows-msvc
+cargo install --locked cargo-xwin
+bun tauri build --runner cargo-xwin --target x86_64-pc-windows-msvc
+```
+
+Output: `src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/Tix Recorder_<version>_x64-setup.exe`.
+
 ## Permissions
 
 | Permission       | When                       | Notes                                                      |
@@ -83,7 +95,8 @@ src-tauri/sidecar     recorder.swift: `list` | `request` | `record <json>`
 ## Limitations
 
 - The camera overlay is captured only in Display and Area modes, not in Window mode.
-- macOS only. Windows and Linux are not supported.
+- Windows: no system audio (ffmpeg has no WASAPI loopback), GDI capture is CPU-bound, window capture matches by title so a renamed window must be picked again. Untested on real hardware until a Windows machine runs the installer.
+- Linux is not supported.
 
 ## License
 

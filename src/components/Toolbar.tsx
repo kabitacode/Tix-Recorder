@@ -14,6 +14,7 @@ export interface ToolbarProps {
   camera: boolean;
   onCamera: () => void;
   systemAudio: boolean;
+  systemAudioDisabledReason?: string;
   onSystemAudio: () => void;
   mic: boolean;
   onMic: () => void;
@@ -51,7 +52,13 @@ export default function Toolbar(p: ToolbarProps) {
       <Divider />
 
       <ToolButton icon={<Webcam size={ICON} />} title="Camera overlay" active={p.camera} onClick={p.onCamera} />
-      <ToolButton icon={p.systemAudio ? <Volume2 size={ICON} /> : <VolumeX size={ICON} />} title="System audio" active={p.systemAudio} disabled={locked} onClick={p.onSystemAudio} />
+      <ToolButton
+        icon={p.systemAudio ? <Volume2 size={ICON} /> : <VolumeX size={ICON} />}
+        title={p.systemAudioDisabledReason ?? "System audio"}
+        active={p.systemAudio && !p.systemAudioDisabledReason}
+        disabled={locked || !!p.systemAudioDisabledReason}
+        onClick={p.onSystemAudio}
+      />
       <div className="flex items-center">
         <ToolButton icon={p.mic ? <Mic size={ICON} /> : <MicOff size={ICON} />} title="Microphone" active={p.mic} disabled={locked} onClick={p.onMic} />
         <button

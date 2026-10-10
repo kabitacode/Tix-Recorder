@@ -1,14 +1,14 @@
 {
   "name": "tix-recorder",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "sidecar": "mkdir -p src-tauri/binaries && swiftc -O -target $(uname -m)-apple-macos15.0 -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist -Xlinker src-tauri/sidecar/Info.plist src-tauri/sidecar/recorder.swift -o src-tauri/binaries/recorder-$(rustc -vV | sed -n \"s/host: //p\")"
+    "sidecar": "bun scripts/sidecar.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",

@@ -1,7 +1,7 @@
 // Wrappers for the Rust recording commands.
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { Mode, PrivacyPane, RecordOptions, RecordingEvent, Sources } from "./types";
+import type { CaptureTarget, Mode, PrivacyPane, RecordOptions, RecordingEvent, Sources } from "./types";
 
 export const listSources = () => invoke<Sources>("list_sources");
 export const requestPermissions = () => invoke<Pick<Sources, "screenPermission" | "micPermission">>("request_permissions");
@@ -12,7 +12,7 @@ export const startRecording = (opts: RecordOptions) => invoke<string>("start_rec
 export const stopRecording = () => invoke<void>("stop_recording");
 export const pauseRecording = () => invoke<void>("pause_recording");
 export const resumeRecording = () => invoke<void>("resume_recording");
-export const takeScreenshot = (mode: Mode, path: string) => invoke<string | null>("take_screenshot", { mode, path });
+export const takeScreenshot = (mode: Mode, path: string, target: CaptureTarget = {}) => invoke<string | null>("take_screenshot", { mode, path, ...target });
 
 // Events the Rust side emits while the sidecar runs (stopped / error / exited).
 export const onRecordingEvent = (cb: (e: RecordingEvent) => void) => listen<RecordingEvent>("recording-event", (e) => cb(e.payload));

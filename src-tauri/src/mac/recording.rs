@@ -3,7 +3,7 @@ use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State};
 
-use crate::sidecar;
+use super::sources;
 
 #[derive(Default)]
 pub struct RecState(Mutex<Option<Child>>);
@@ -24,7 +24,7 @@ fn spawn(app: AppHandle, opts: serde_json::Value) -> Result<String, String> {
     if let Some(parent) = opts["output"].as_str().and_then(|p| std::path::Path::new(p).parent()) {
         std::fs::create_dir_all(parent).map_err(|e| format!("output folder: {e}"))?;
     }
-    let mut child = Command::new(sidecar::path())
+    let mut child = Command::new(sources::path())
         .arg("record")
         .arg(opts.to_string())
         .stdin(Stdio::piped())

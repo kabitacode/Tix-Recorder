@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "app": {
+    "macOSPrivateApi": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Tix Recorder",
+        "width": 600,
+        "height": 52,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "shadow": true,
+        "alwaysOnTop": true,
+        "center": true,
+        "windowEffects": {
+          "effects": [
+            "hudWindow"
+          ],
+          "state": "active",
+          "radius": 16
+        }
+      }
+    ]
+  },
+  "bundle": {
+    "externalBin": [
+      "binaries/recorder"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "15.0",
+      "entitlements": "Entitlements.plist"
+    }
+  }
+}

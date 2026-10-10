@@ -1,7 +1,7 @@
 // Recording state machine: start/pause/resume/stop, elapsed timer, screenshots, and status notices.
 import { useEffect, useRef, useState } from "react";
 import { onRecordingEvent, outputFile, pauseRecording, resumeRecording, startRecording, stopRecording, takeScreenshot } from "../lib/recorder";
-import type { Mode, RecordOptions } from "../lib/types";
+import type { CaptureTarget, Mode, RecordOptions } from "../lib/types";
 
 export type RecStatus = "idle" | "starting" | "recording" | "paused" | "stopping";
 
@@ -95,9 +95,9 @@ export function useRecorder() {
     }
   };
 
-  const screenshot = async (mode: Mode, dir: string) => {
+  const screenshot = async (mode: Mode, dir: string, target: CaptureTarget = {}) => {
     try {
-      const path = await takeScreenshot(mode, outputFile(dir, "Tix Shot", "png"));
+      const path = await takeScreenshot(mode, outputFile(dir, "Tix Shot", "png"), target);
       if (path) {
         say(`Saved ${path.split("/").pop()}`);
         setCompleted((n) => n + 1);

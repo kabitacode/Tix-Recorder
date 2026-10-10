@@ -27,6 +27,8 @@ export type AuthStatus = "authorized" | "denied" | "notDetermined";
 export type PrivacyPane = "screen" | "microphone" | "camera";
 
 export interface Sources {
+  platform?: "macos" | "windows";
+  supportsSystemAudio?: boolean;
   screenPermission: boolean;
   micPermission: AuthStatus;
   displays?: DisplayInfo[];
@@ -45,6 +47,12 @@ export interface Area {
 }
 
 // Payload for the sidecar "record" command.
+export interface CaptureTarget {
+  displayId?: number;
+  windowId?: number;
+  rect?: [number, number, number, number];
+}
+
 export interface RecordOptions {
   mode: Mode;
   displayId?: number;
