@@ -1,0 +1,22 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability for the main window",
+  "windows": [
+    "main",
+    "area",
+    "camera"
+  ],
+  "permissions": [
+    "core:default",
+    "core:window:allow-set-size",
+    "core:window:allow-start-dragging",
+    "core:window:allow-close",
+    "core:window:allow-minimize",
+    "core:window:allow-hide",
+    "core:window:allow-show",
+    "core:webview:allow-create-webview-window",
+    "opener:default",
+    "dialog:default"
+  ]
+}

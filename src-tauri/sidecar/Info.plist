@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key>
+  <string>com.app.tix.recorder.sidecar</string>
+  <key>CFBundleName</key>
+  <string>Tix Recorder Engine</string>
+  <key>CFBundleExecutable</key>
+  <string>recorder</string>
+  <key>LSUIElement</key>
+  <true/>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Tix Recorder records your microphone when you enable it.</string>
+  <key>NSCameraUsageDescription</key>
+  <string>Tix Recorder shows your camera as an overlay when you enable it.</string>
+</dict>
+</plist>
