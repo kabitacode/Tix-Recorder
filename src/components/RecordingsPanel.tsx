@@ -22,6 +22,16 @@ export default function RecordingsPanel({ dir, revision, onError }: Props) {
   // Reload on folder change or after a recording finishes.
   useEffect(load, [dir, revision]);
 
+  // Files can change outside the app (Finder, other tools): refresh on focus and poll while open.
+  useEffect(() => {
+    window.addEventListener("focus", load);
+    const t = setInterval(load, 3000);
+    return () => {
+      window.removeEventListener("focus", load);
+      clearInterval(t);
+    };
+  }, [dir]);
+
   // Confirm with a native dialog, then delete and refresh.
   const remove = async (r: Recording) => {
     const ok = await ask(`Delete "${r.name}"? This cannot be undone.`, { title: "Delete recording", kind: "warning", okLabel: "Delete" });

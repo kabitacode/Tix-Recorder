@@ -20,9 +20,12 @@ export interface ToolbarProps {
   panel: Panel;
   onPanel: (p: Panel) => void;
   status: RecStatus;
+  pending: boolean;
   elapsed: number;
   recordDisabledReason?: string;
   onStart: () => void;
+  onPause: () => void;
+  onResume: () => void;
   onStop: () => void;
   onScreenshot: () => void;
   onClose: () => void;
@@ -64,7 +67,17 @@ export default function Toolbar(p: ToolbarProps) {
 
       <Divider />
 
-      <RecordButton status={p.status} elapsed={p.elapsed} disabled={!!p.recordDisabledReason} title={p.recordDisabledReason} onStart={p.onStart} onStop={p.onStop} />
+      <RecordButton
+        status={p.status}
+        pending={p.pending}
+        elapsed={p.elapsed}
+        disabled={!!p.recordDisabledReason}
+        title={p.recordDisabledReason}
+        onStart={p.onStart}
+        onPause={p.onPause}
+        onResume={p.onResume}
+        onStop={p.onStop}
+      />
 
       <Divider />
 

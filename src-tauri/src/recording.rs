@@ -65,9 +65,25 @@ fn spawn(app: AppHandle, opts: serde_json::Value) -> Result<String, String> {
     Ok(path)
 }
 
-#[tauri::command]
-pub fn stop_recording(state: State<RecState>) -> Result<(), String> {
+fn send(state: &State<RecState>, cmd: &str) -> Result<(), String> {
     let mut guard = state.0.lock().unwrap();
     let child = guard.as_mut().ok_or("Not recording")?;
-    child.stdin.as_mut().ok_or("stdin closed")?.write_all(b"stop\n").map_err(|e| e.to_string())
+    let stdin = child.stdin.as_mut().ok_or("stdin closed")?;
+    stdin.write_all(format!("{cmd}\n").as_bytes()).map_err(|e| e.to_string())?;
+    stdin.flush().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn stop_recording(state: State<RecState>) -> Result<(), String> {
+    send(&state, "stop")
+}
+
+#[tauri::command]
+pub fn pause_recording(state: State<RecState>) -> Result<(), String> {
+    send(&state, "pause")
+}
+
+#[tauri::command]
+pub fn resume_recording(state: State<RecState>) -> Result<(), String> {
+    send(&state, "resume")
 }

@@ -15,6 +15,10 @@ func fail(_ msg: String) -> Never {
     exit(1)
 }
 
+func err(_ msg: String) -> NSError {
+    NSError(domain: "rec", code: 1, userInfo: [NSLocalizedDescriptionKey: msg])
+}
+
 struct Options: Decodable {
     var mode: String
     var displayId: UInt32?
@@ -70,12 +74,49 @@ func listAll() async {
     emit(out)
 }
 
+// Joins finished segment files into one mp4 without re-encoding.
+func concat(_ urls: [URL], to dest: URL) async throws {
+    let comp = AVMutableComposition()
+    var byType: [AVMediaType: [AVMutableCompositionTrack]] = [:]
+    var cursor = CMTime.zero
+    for url in urls {
+        let asset = AVURLAsset(url: url)
+        let tracks = try await asset.load(.tracks)
+        var index: [AVMediaType: Int] = [:]
+        var longest = CMTime.zero
+        for track in tracks {
+            let range = try await track.load(.timeRange)
+            let i = index[track.mediaType, default: 0]
+            index[track.mediaType] = i + 1
+            var list = byType[track.mediaType] ?? []
+            if list.count <= i {
+                guard let t = comp.addMutableTrack(withMediaType: track.mediaType, preferredTrackID: kCMPersistentTrackID_Invalid) else {
+                    throw err("Cannot build composition track")
+                }
+                list.append(t)
+                byType[track.mediaType] = list
+            }
+            try list[i].insertTimeRange(range, of: track, at: cursor)
+            longest = CMTimeMaximum(longest, range.duration)
+        }
+        cursor = cursor + longest
+    }
+    guard let export = AVAssetExportSession(asset: comp, presetName: AVAssetExportPresetPassthrough) else {
+        throw err("Cannot create export session")
+    }
+    try await export.export(to: dest, as: .mp4)
+}
+
 final class Recorder: NSObject, SCStreamDelegate, SCRecordingOutputDelegate {
     var stream: SCStream?
     var output: SCRecordingOutput?
-    var path = ""
-    var done: CheckedContinuation<String?, Never>?
+    var codec: AVVideoCodecType = .h264
+    var finalPath = ""
+    var segments: [URL] = []
+    var paused = false
     var stopping = false
+    private let lock = NSLock()
+    private var segmentDone: CheckedContinuation<String?, Never>?
 
     func start(_ o: Options) async throws {
         let keep = o.keepTitles ?? []
@@ -84,14 +125,12 @@ final class Recorder: NSObject, SCStreamDelegate, SCRecordingOutputDelegate {
         let filter: SCContentFilter
         var size: CGSize
         if o.mode == "window" {
-            guard let w = content.windows.first(where: { $0.windowID == o.windowId }) else {
-                throw NSError(domain: "rec", code: 1, userInfo: [NSLocalizedDescriptionKey: "Window not found"])
-            }
+            guard let w = content.windows.first(where: { $0.windowID == o.windowId }) else { throw err("Window not found") }
             filter = SCContentFilter(desktopIndependentWindow: w)
             size = w.frame.size
         } else {
             guard let d = content.displays.first(where: { $0.displayID == o.displayId }) ?? content.displays.first else {
-                throw NSError(domain: "rec", code: 2, userInfo: [NSLocalizedDescriptionKey: "Display not found"])
+                throw err("Display not found")
             }
             filter = SCContentFilter(display: d, excludingWindows: parentWindows(content, keep: keep))
             size = d.frame.size
@@ -111,60 +150,121 @@ final class Recorder: NSObject, SCStreamDelegate, SCRecordingOutputDelegate {
             if AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined {
                 _ = await AVCaptureDevice.requestAccess(for: .audio)
             }
-            guard authStatus(.audio) != "denied" else {
-                throw NSError(domain: "rec", code: 3, userInfo: [NSLocalizedDescriptionKey: "Microphone permission denied"])
-            }
+            guard authStatus(.audio) != "denied" else { throw err("Microphone permission denied") }
             cfg.captureMicrophone = true
             cfg.microphoneCaptureDeviceID = mic
         }
 
-        let rc = SCRecordingOutputConfiguration()
-        path = o.output
-        rc.outputURL = URL(fileURLWithPath: path)
-        rc.outputFileType = .mp4
-        rc.videoCodecType = o.codec == "hevc" ? .hevc : .h264
-        let out = SCRecordingOutput(configuration: rc, delegate: self)
+        codec = o.codec == "hevc" ? .hevc : .h264
+        finalPath = o.output
         let s = SCStream(filter: filter, configuration: cfg, delegate: self)
-        try s.addRecordingOutput(out)
-        try await s.startCapture()
         stream = s
+        try beginSegment()
+        try await s.startCapture()
+    }
+
+    private func beginSegment() throws {
+        guard let s = stream else { throw err("Stream not running") }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tix-\(ProcessInfo.processInfo.processIdentifier)-\(segments.count).mp4")
+        let rc = SCRecordingOutputConfiguration()
+        rc.outputURL = url
+        rc.outputFileType = .mp4
+        rc.videoCodecType = codec
+        let out = SCRecordingOutput(configuration: rc, delegate: self)
+        try s.addRecordingOutput(out)
         output = out
+        segments.append(url)
+    }
+
+    private func endSegment() async -> String? {
+        guard let out = output, let s = stream else { return nil }
+        output = nil
+        return await withCheckedContinuation { c in
+            lock.lock()
+            segmentDone = c
+            lock.unlock()
+            Task {
+                try? await Task.sleep(for: .seconds(10))
+                self.finishSegment("Timed out while finalizing the recording")
+            }
+            do {
+                try s.removeRecordingOutput(out)
+            } catch {
+                finishSegment(error.localizedDescription)
+            }
+        }
+    }
+
+    private func finishSegment(_ error: String?) {
+        lock.lock()
+        let c = segmentDone
+        segmentDone = nil
+        lock.unlock()
+        c?.resume(returning: error)
+    }
+
+    func pause() async {
+        guard !paused, !stopping else { return }
+        if let e = await endSegment() { emit(["event": "error", "message": e]) }
+        paused = true
+        emit(["event": "paused"])
+    }
+
+    func resume() {
+        guard paused, !stopping else { return }
+        do {
+            try beginSegment()
+            paused = false
+            emit(["event": "resumed"])
+        } catch {
+            emit(["event": "error", "message": error.localizedDescription])
+        }
     }
 
     func stop() async {
-        if stopping { return }
+        guard !stopping else { return }
         stopping = true
-        let err: String? = await withCheckedContinuation { c in
-            done = c
-            Task {
-                try? await Task.sleep(for: .seconds(10))
-                finish("Timed out while finalizing the recording")
-            }
-            Task {
-                do {
-                    try await stream?.stopCapture()
-                } catch {
-                    finish(error.localizedDescription)
-                }
-            }
-        }
-        if let err { emit(["event": "error", "message": err, "path": path]) } else {
-            emit(["event": "stopped", "path": path])
-        }
-        exit(err == nil ? 0 : 1)
+        var problem: String? = nil
+        if !paused { problem = await endSegment() }
+        try? await stream?.stopCapture()
+        await finalize(problem)
     }
 
-    func finish(_ err: String?) {
-        done?.resume(returning: err)
-        done = nil
-    }
-
-    func recordingOutputDidFinishRecording(_ o: SCRecordingOutput) { finish(nil) }
-    func recordingOutput(_ o: SCRecordingOutput, didFailWithError e: Error) { finish(e.localizedDescription) }
-    func stream(_ s: SCStream, didStopWithError e: Error) {
-        if stopping { finish(e.localizedDescription) } else {
-            emit(["event": "error", "message": e.localizedDescription, "path": path])
+    private func finalize(_ problem: String?) async {
+        var error = problem
+        let dest = URL(fileURLWithPath: finalPath)
+        let existing = segments.filter { FileManager.default.fileExists(atPath: $0.path) }
+        do {
+            if existing.isEmpty {
+                throw err("No video data was recorded")
+            } else if existing.count == 1 {
+                try? FileManager.default.removeItem(at: dest)
+                try FileManager.default.moveItem(at: existing[0], to: dest)
+            } else {
+                try? FileManager.default.removeItem(at: dest)
+                try await concat(existing, to: dest)
+            }
+        } catch let e {
+            error = error ?? e.localizedDescription
+        }
+        for url in existing where url != dest { try? FileManager.default.removeItem(at: url) }
+        if let error {
+            emit(["event": "error", "message": error, "path": finalPath])
             exit(1)
+        }
+        emit(["event": "stopped", "path": finalPath])
+        exit(0)
+    }
+
+    func recordingOutputDidFinishRecording(_ o: SCRecordingOutput) { finishSegment(nil) }
+    func recordingOutput(_ o: SCRecordingOutput, didFailWithError e: Error) { finishSegment(e.localizedDescription) }
+    func stream(_ s: SCStream, didStopWithError e: Error) {
+        if stopping {
+            finishSegment(e.localizedDescription)
+        } else {
+            stopping = true
+            Task { await self.finalize(e.localizedDescription) }
         }
     }
 }
@@ -188,11 +288,22 @@ case "record":
     let rec = Recorder()
     do { try await rec.start(opts) } catch { fail(error.localizedDescription) }
     emit(["event": "started", "path": opts.output])
-    DispatchQueue.global().async {
-        while let line = readLine() {
-            if line.trimmingCharacters(in: .whitespacesAndNewlines) == "stop" { break }
+    let commands = AsyncStream<String> { cont in
+        DispatchQueue.global().async {
+            while let line = readLine() {
+                cont.yield(line.trimmingCharacters(in: .whitespacesAndNewlines))
+            }
+            cont.yield("stop")
+            cont.finish()
         }
-        Task { await rec.stop() }
+    }
+    for await cmd in commands {
+        switch cmd {
+        case "pause": await rec.pause()
+        case "resume": rec.resume()
+        case "stop": await rec.stop()
+        default: break
+        }
     }
     while true { try? await Task.sleep(for: .seconds(3600)) }
 default:

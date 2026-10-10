@@ -15,6 +15,8 @@ pub fn run() {
             sidecar::request_permissions,
             recording::start_recording,
             recording::stop_recording,
+            recording::pause_recording,
+            recording::resume_recording,
             screenshot::take_screenshot,
             paths::default_output_dir,
             paths::open_privacy_settings,

@@ -137,9 +137,12 @@ export default function App() {
         panel={panel}
         onPanel={setPanel}
         status={rec.status}
+        pending={rec.pending}
         elapsed={rec.elapsed}
         recordDisabledReason={recordDisabledReason}
         onStart={start}
+        onPause={rec.pause}
+        onResume={rec.resume}
         onStop={rec.stop}
         onScreenshot={() => rec.screenshot(mode, settings.outputDir)}
         onClose={close}

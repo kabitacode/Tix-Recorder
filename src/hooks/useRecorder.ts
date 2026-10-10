@@ -1,12 +1,13 @@
-// Recording state machine: start/stop, elapsed timer, screenshots, and status notices.
+// Recording state machine: start/pause/resume/stop, elapsed timer, screenshots, and status notices.
 import { useEffect, useRef, useState } from "react";
-import { onRecordingEvent, outputFile, startRecording, stopRecording, takeScreenshot } from "../lib/recorder";
+import { onRecordingEvent, outputFile, pauseRecording, resumeRecording, startRecording, stopRecording, takeScreenshot } from "../lib/recorder";
 import type { Mode, RecordOptions } from "../lib/types";
 
-export type RecStatus = "idle" | "starting" | "recording" | "stopping";
+export type RecStatus = "idle" | "starting" | "recording" | "paused" | "stopping";
 
 export function useRecorder() {
   const [status, setStatus] = useState<RecStatus>("idle");
+  const [pending, setPending] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
   const [completed, setCompleted] = useState(0);
@@ -20,14 +21,27 @@ export function useRecorder() {
 
   useEffect(() => {
     const un = onRecordingEvent((e) => {
-      if (e.event === "stopped") {
-        say(`Saved ${e.path.split("/").pop()}`);
-        setCompleted((n) => n + 1);
-      } else if (e.event === "error") {
-        say(e.message, true);
+      setPending(false);
+      switch (e.event) {
+        case "paused":
+          setStatus("paused");
+          break;
+        case "resumed":
+          setStatus("recording");
+          break;
+        case "stopped":
+          say(`Saved ${e.path.split("/").pop()}`);
+          setCompleted((n) => n + 1);
+          setStatus("idle");
+          break;
+        case "error":
+          say(e.message, true);
+          setStatus((s) => (e.path ? "idle" : s));
+          break;
+        case "exited":
+          setStatus("idle");
+          break;
       }
-      if (e.event !== "exited") setStatus("idle");
-      else setStatus((s) => (s === "recording" ? "idle" : s));
     });
     return () => {
       un.then((f) => f());
@@ -36,13 +50,13 @@ export function useRecorder() {
 
   useEffect(() => {
     if (status !== "recording") return;
-    setElapsed(0);
     const t = setInterval(() => setElapsed((e) => e + 1), 1000);
     return () => clearInterval(t);
   }, [status]);
 
   const start = async (opts: Omit<RecordOptions, "output">, dir: string) => {
     setStatus("starting");
+    setElapsed(0);
     try {
       await startRecording({ ...opts, output: outputFile(dir, "Tix Recording", "mp4") });
       setStatus("recording");
@@ -51,6 +65,19 @@ export function useRecorder() {
       setStatus("idle");
     }
   };
+
+  const send = async (fn: () => Promise<void>) => {
+    setPending(true);
+    try {
+      await fn();
+    } catch (e) {
+      say(String(e), true);
+      setPending(false);
+    }
+  };
+
+  const pause = () => send(pauseRecording);
+  const resume = () => send(resumeRecording);
 
   const stop = async () => {
     setStatus("stopping");
@@ -61,7 +88,7 @@ export function useRecorder() {
           if (s === "stopping") say("Recorder did not respond. The file may be incomplete.", true);
           return s === "stopping" ? "idle" : s;
         });
-      }, 15000);
+      }, 60000);
     } catch (e) {
       say(String(e), true);
       setStatus("idle");
@@ -80,5 +107,5 @@ export function useRecorder() {
     }
   };
 
-  return { status, elapsed, notice, completed, say, start, stop, screenshot };
+  return { status, pending, elapsed, notice, completed, say, start, pause, resume, stop, screenshot };
 }

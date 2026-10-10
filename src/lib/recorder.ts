@@ -10,6 +10,8 @@ export const defaultOutputDir = () => invoke<string>("default_output_dir");
 
 export const startRecording = (opts: RecordOptions) => invoke<string>("start_recording", { opts });
 export const stopRecording = () => invoke<void>("stop_recording");
+export const pauseRecording = () => invoke<void>("pause_recording");
+export const resumeRecording = () => invoke<void>("resume_recording");
 export const takeScreenshot = (mode: Mode, path: string) => invoke<string | null>("take_screenshot", { mode, path });
 
 // Events the Rust side emits while the sidecar runs (stopped / error / exited).

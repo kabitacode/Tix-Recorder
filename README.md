@@ -82,7 +82,6 @@ src-tauri/sidecar     recorder.swift: `list` | `request` | `record <json>`
 
 ## Limitations
 
-- Pause and resume are not supported. `SCRecordingOutput` has no pause API.
 - The camera overlay is captured only in Display and Area modes, not in Window mode.
 - macOS only. Windows and Linux are not supported.
 

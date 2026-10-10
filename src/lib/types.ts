@@ -61,6 +61,8 @@ export interface RecordOptions {
 
 // Streamed back from the sidecar while recording.
 export type RecordingEvent =
+  | { event: "paused" }
+  | { event: "resumed" }
   | { event: "stopped"; path: string }
   | { event: "error"; message: string; path?: string }
   | { event: "exited" };
